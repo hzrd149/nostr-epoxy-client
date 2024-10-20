@@ -44,6 +44,8 @@ jobs:
         run: pnpm install
 
       - name: Build
+        env:
+          VITE_BASE: /nostr-epoxy-client
         run: pnpm vite build
 
       - name: Setup Pages
