@@ -1,3 +1,17 @@
+import { Proof } from "@cashu/cashu-ts";
+
+type Product = {
+  name: "KiB" | "MiB" | "GiB";
+  price: number;
+  unit?: string;
+  mint: string;
+  pubkey: string;
+};
+type Payment = {
+  proofs: Proof[];
+  mint: string;
+};
+
 export class ProxyWebSocket extends EventTarget implements WebSocket {
   _readyState: number;
 
@@ -6,6 +20,9 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
   onerror: ((this: WebSocket, ev: Event) => any) | null = null;
   onmessage: ((this: WebSocket, ev: MessageEvent) => any) | null = null;
   onopen: ((this: WebSocket, ev: Event) => any) | null = null;
+  onproxy: ((this: WebSocket, hop: string) => any) | null = null;
+
+  onPaymentRequest: ((socket: WebSocket, hop: string, products: Product[]) => Promise<Payment | null>) | null = null;
 
   url: string;
 
@@ -27,7 +44,7 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
     this._readyState = WebSocket.CONNECTING;
 
     // intercept PROXY messages
-    this.ws.onmessage = (event: MessageEvent) => {
+    this.ws.onmessage = async (event: MessageEvent) => {
       try {
         const message = JSON.parse(event.data) as string[];
         if (!Array.isArray(message)) throw new Error("Message is not a json array");
@@ -40,6 +57,21 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
             case "CONNECTED":
               this.hopIndex++;
               this.upstreamProxyConnected();
+              break;
+            case "PAYMENT_REQUIRED":
+              const [_, _payment, products] = message;
+              if (!Array.isArray(products)) throw new Error("Invalid products");
+
+              const hop = this.hops[this.hopIndex];
+              const payment = await this.onPaymentRequest?.(this, hop, products);
+
+              if (payment === null) {
+                // cancel
+                this.close();
+              } else {
+                // retry proxy with payment
+                this.ws.send(JSON.stringify(["PROXY", hop, payment]));
+              }
               break;
             case "ERROR":
               this.upstreamProxyError(message[2]);
@@ -74,6 +106,8 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
   }
 
   private upstreamProxyConnected() {
+    this.onproxy?.(this.hops[this.hopIndex - 1]);
+
     if (this.hopIndex < this.hops.length) {
       this.ws.send(JSON.stringify(["PROXY", this.hops[this.hopIndex]]));
     } else {

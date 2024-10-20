@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Epoxy Route Builder</title>
+  </head>
+  <body>
+    <div>
+      <button id="topup">topup</button>
+      <button id="withdraw">withdraw</button>
+      <div id="balance"></div>
+      <div id="mint"></div>
+    </div>
+    <hr />
+    <form id="setup">
+      <input name="proxy" type="text" size="60" placeholder="ws://proxy.example.com" style="font-family: monospace" />
+      <textarea name="hops" rows="6" cols="80" placeholder="hops" style="font-family: monospace"></textarea>
+      <br />
+      <button type="submit">connect</button>
+    </form>
+    <br />
+    <form id="filter" style="display: none">
+      <input
+        name="message"
+        type="text"
+        size="60"
+        required
+        value='["REQ", "testing", {"kinds": [0]}]'
+        style="font-family: monospace"
+      />
+      <button type="submit">send</button>
+    </form>
+    <pre id="log" style="border: 1px solid black; padding: 1em; overflow: auto; font-family: monospace"></pre>
+
+    <script type="module" src="./example/index.ts"></script>
+  </body>
+</html>

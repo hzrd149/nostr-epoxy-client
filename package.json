@@ -11,7 +11,8 @@
     "build": "tsc",
     "prepublish": "npm run build",
     "format": "prettier -w .",
-    "docs": "typedoc src/index.ts"
+    "docs": "typedoc src/index.ts",
+    "dev": "vite serve"
   },
   "files": [
     "lib"
@@ -21,16 +22,18 @@
       "import": "./lib/index.js",
       "types": "./lib/index.d.ts"
     },
-    "./sws": {
+    "./ws": {
       "import": "./lib/ws.js",
       "types": "./lib/ws.d.ts"
     }
   },
   "devDependencies": {
+    "@cashu/cashu-ts": "^1.1.0",
     "@changesets/cli": "^2.27.1",
     "prettier": "^3.3.3",
     "typedoc": "^0.25.12",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vite": "^5.4.9"
   },
   "packageManager": "pnpm@9.12.0"
 }
