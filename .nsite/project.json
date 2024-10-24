@@ -1,0 +1,11 @@
+{
+  "relays": ["wss://relay.damus.io", "wss://nostrue.com", "wss://purplerelay.com"],
+  "servers": ["https://cdn.hzrd149.com", "https://nostr.download"],
+  "profile": {
+    "name": "nostr-epoxy-client",
+    "about": "The example page for nostr-epoxy-client"
+  },
+  "publishProfile": true,
+  "publishServerList": true,
+  "publishRelayList": true
+}
