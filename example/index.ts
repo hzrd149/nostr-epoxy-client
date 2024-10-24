@@ -4,7 +4,7 @@ import { ProxyWebSocket } from "../src/index";
 let proofs: Proof[] = JSON.parse(localStorage.getItem("proofs") || "[]");
 let mint: string = localStorage.getItem("mint") || "";
 
-let ws: ProxyWebSocket | undefined = undefined;
+let ws: ProxyWebSocket | WebSocket | undefined = undefined;
 
 const wallets = new Map<string, CashuWallet>();
 function getWallet(mint) {
@@ -67,37 +67,42 @@ setup.addEventListener("submit", async (e) => {
     for (const hop of hops) url.searchParams.append("hop", hop);
 
     log("+ Connecting...");
-    ws = new ProxyWebSocket(url.toString());
 
-    ws.onPaymentRequest = async (socket, hop, products) => {
-      try {
-        log(`+ Payment Required`);
-        const product = products[0];
+    if (hops.length > 0) {
+      const proxy = (ws = new ProxyWebSocket(url.toString()));
 
-        const pay = confirm(
-          [`Purchase 1 ${product.name} for ${product.price}${product.unit || ""}`, `To relay: ${hop}`].join("\n"),
-        );
+      proxy.onPaymentRequest = async (socket, hop, request) => {
+        try {
+          log(`+ Payment Required`);
+          const amountStr = prompt(
+            [`Payment required (${request.price}${request.unit ?? ""}/KiB)`, `To relay: ${hop}`].join("\n"),
+          );
+          if (!amountStr) return null;
+          const amount = parseInt(amountStr);
 
-        if (pay) {
-          const wallet = getWallet(mint);
-          const { send, returnChange } = await wallet.send(product.price, proofs, { pubkey: product.pubkey });
+          if (amount) {
+            const wallet = getWallet(mint);
+            const { send, returnChange } = await wallet.send(amount, proofs);
 
-          proofs = returnChange;
-          localStorage.setItem("proofs", JSON.stringify(proofs));
-          updateWallet();
+            proofs = returnChange;
+            localStorage.setItem("proofs", JSON.stringify(proofs));
+            updateWallet();
 
-          log("+ Paid");
-          return { proofs: send, mint };
+            log("+ Paid");
+            return send;
+          }
+        } catch (error) {
+          if (error instanceof Error) alert(error.message);
         }
-      } catch (error) {
-        if (error instanceof Error) alert(error.message);
-      }
-      return null;
-    };
+        return null;
+      };
 
-    ws.onproxy = (hop) => {
-      log(`+ Connected to ${hop}`);
-    };
+      proxy.onproxy = (hop) => {
+        log(`+ Connected to ${hop}`);
+      };
+    } else {
+      ws = new WebSocket(url.toString());
+    }
 
     ws.onopen = () => {
       log("+ Connected");

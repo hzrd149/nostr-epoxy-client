@@ -1,16 +1,36 @@
 import { Proof } from "@cashu/cashu-ts";
 
-type Product = {
-  name: "KiB" | "MiB" | "GiB";
+type PaymentRequest = {
   price: number;
   unit?: string;
   mint: string;
+};
+type Payment = Proof[];
+
+type NostrEvent = {
+  kind: number;
+  content: string;
+  tags: string[][];
+  created_at: number;
+  sig: string;
+  id: string;
   pubkey: string;
 };
-type Payment = {
-  proofs: Proof[];
-  mint: string;
-};
+
+type ProxyRequestMessage = ["PROXY", string] | ["PROXY", string, PaymentRequest | NostrEvent];
+
+type ProxyConnectingMessage = ["PROXY", "CONNECTING"];
+type ProxyConnectedMessage = ["PROXY", "CONNECTED"];
+type ProxyErrorMessage = ["PROXY", "ERROR", string];
+type ProxyAuthRequiredMessage = ["PROXY", "AUTH_REQUIRED", string];
+type ProxyPaymentRequestMessage = ["PROXY", "PAYMENT_REQUIRED", PaymentRequest];
+
+type ProxyMessage =
+  | ProxyConnectingMessage
+  | ProxyConnectedMessage
+  | ProxyErrorMessage
+  | ProxyAuthRequiredMessage
+  | ProxyPaymentRequestMessage;
 
 export class ProxyWebSocket extends EventTarget implements WebSocket {
   _readyState: number;
@@ -22,7 +42,9 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
   onopen: ((this: WebSocket, ev: Event) => any) | null = null;
   onproxy: ((this: WebSocket, hop: string) => any) | null = null;
 
-  onPaymentRequest: ((socket: WebSocket, hop: string, products: Product[]) => Promise<Payment | null>) | null = null;
+  onPaymentRequest: ((socket: WebSocket, hop: string, request: PaymentRequest) => Promise<Payment | null>) | null =
+    null;
+  onAuthRequest: ((socket: WebSocket, hop: string, challenge: string) => Promise<NostrEvent | null>) | null = null;
 
   url: string;
 
@@ -46,10 +68,12 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
     // intercept PROXY messages
     this.ws.onmessage = async (event: MessageEvent) => {
       try {
-        const message = JSON.parse(event.data) as string[];
+        const message = JSON.parse(event.data) as ProxyMessage;
         if (!Array.isArray(message)) throw new Error("Message is not a json array");
 
         if (message[0] === "PROXY") {
+          const hop = this.hops[this.hopIndex];
+
           switch (message[1]) {
             case "CONNECTING":
               this._readyState = WebSocket.CONNECTING;
@@ -58,12 +82,9 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
               this.hopIndex++;
               this.upstreamProxyConnected();
               break;
-            case "PAYMENT_REQUIRED":
-              const [_, _payment, products] = message;
-              if (!Array.isArray(products)) throw new Error("Invalid products");
-
-              const hop = this.hops[this.hopIndex];
-              const payment = await this.onPaymentRequest?.(this, hop, products);
+            case "PAYMENT_REQUIRED": {
+              const [_, _payment, request] = message;
+              const payment = await this.onPaymentRequest?.(this, hop, request);
 
               if (payment === null) {
                 // cancel
@@ -73,6 +94,19 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
                 this.ws.send(JSON.stringify(["PROXY", hop, payment]));
               }
               break;
+            }
+            case "AUTH_REQUIRED": {
+              const [_, _auth, challenge] = message;
+              const auth = await this.onAuthRequest?.(this, hop, challenge);
+              if (auth === null) {
+                // cancel
+                this.close();
+              } else {
+                // retry proxy hop with auth
+                this.ws.send(JSON.stringify(["PROXY", hop, auth]));
+              }
+              break;
+            }
             case "ERROR":
               this.upstreamProxyError(message[2]);
               break;
@@ -90,7 +124,8 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
 
   private upstreamOpen(_event: Event) {
     this._readyState = WebSocket.CONNECTING;
-    this.ws.send(JSON.stringify(["PROXY", this.hops[this.hopIndex]]));
+    const message: ProxyRequestMessage = ["PROXY", this.hops[this.hopIndex]];
+    this.ws.send(JSON.stringify(message));
   }
   private upstreamError(event: Event) {
     this._readyState = this.ws.readyState;
@@ -109,7 +144,8 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
     this.onproxy?.(this.hops[this.hopIndex - 1]);
 
     if (this.hopIndex < this.hops.length) {
-      this.ws.send(JSON.stringify(["PROXY", this.hops[this.hopIndex]]));
+      const message: ProxyRequestMessage = ["PROXY", this.hops[this.hopIndex]];
+      this.ws.send(JSON.stringify(message));
     } else {
       // finished building route
       const event = new Event("open");
