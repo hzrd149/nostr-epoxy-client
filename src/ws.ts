@@ -1,11 +1,11 @@
 import { Proof } from "@cashu/cashu-ts";
 
-type PaymentRequest = {
+export type PaymentRequest = {
   price: number;
   unit?: string;
   mint: string;
 };
-type Payment = Proof[];
+export type Payment = Proof[];
 
 type NostrEvent = {
   kind: number;
@@ -17,22 +17,27 @@ type NostrEvent = {
   pubkey: string;
 };
 
-type ProxyRequestMessage = ["PROXY", string] | ["PROXY", string, PaymentRequest | NostrEvent];
+export type ProxyRequestMessage = ["PROXY", string] | ["PROXY", string, PaymentRequest | NostrEvent];
 
-type ProxyConnectingMessage = ["PROXY", "CONNECTING"];
-type ProxyConnectedMessage = ["PROXY", "CONNECTED"];
-type ProxyErrorMessage = ["PROXY", "ERROR", string];
-type ProxyAuthRequiredMessage = ["PROXY", "AUTH_REQUIRED", string];
-type ProxyPaymentRequestMessage = ["PROXY", "PAYMENT_REQUIRED", PaymentRequest];
+export type ProxyConnectingMessage = ["PROXY", "CONNECTING"];
+export type ProxyConnectedMessage = ["PROXY", "CONNECTED"];
+export type ProxyErrorMessage = ["PROXY", "ERROR", string];
+export type ProxyAuthRequiredMessage = ["PROXY", "AUTH_REQUIRED", string];
+export type ProxyPaymentRequestMessage = ["PROXY", "PAYMENT_REQUIRED", PaymentRequest];
 
-type ProxyMessage =
+export type ProxyMessage =
   | ProxyConnectingMessage
   | ProxyConnectedMessage
   | ProxyErrorMessage
   | ProxyAuthRequiredMessage
   | ProxyPaymentRequestMessage;
 
-export class ProxyWebSocket extends EventTarget implements WebSocket {
+export type ProxyHandlers = {
+  onPaymentRequest?: (socket: WebSocket, hop: string, request: PaymentRequest) => Promise<Payment | null>;
+  onAuthRequest?: (socket: WebSocket, hop: string, challenge: string) => Promise<NostrEvent | null>;
+};
+
+export class ProxyWebSocket extends EventTarget implements WebSocket, ProxyHandlers {
   _readyState: number;
 
   // events
@@ -42,9 +47,9 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
   onopen: ((this: WebSocket, ev: Event) => any) | null = null;
   onproxy: ((this: WebSocket, hop: string) => any) | null = null;
 
-  onPaymentRequest: ((socket: WebSocket, hop: string, request: PaymentRequest) => Promise<Payment | null>) | null =
-    null;
-  onAuthRequest: ((socket: WebSocket, hop: string, challenge: string) => Promise<NostrEvent | null>) | null = null;
+  // handlers
+  onPaymentRequest?: (socket: WebSocket, hop: string, request: PaymentRequest) => Promise<Payment | null>;
+  onAuthRequest?: (socket: WebSocket, hop: string, challenge: string) => Promise<NostrEvent | null>;
 
   url: string;
 
@@ -52,16 +57,15 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
   private hopIndex = 0;
 
   private ws: WebSocket;
-  constructor(proxyUrl: string) {
+  constructor(proxyUrl: string, hops: string[], handlers?: ProxyHandlers) {
     super();
-    const url = new URL(proxyUrl);
-
-    const hops = url.searchParams.getAll("hop");
-    if (hops.length === 0) throw new Error("Missing pubkey");
+    if (hops.length === 0) throw new Error("Missing hops");
 
     this.hops = hops;
     this.url = proxyUrl;
-    this.ws = new WebSocket(proxyUrl.replace(url.search, "").replace(url.hash, ""));
+    this.ws = new WebSocket(proxyUrl);
+    this.onPaymentRequest = handlers?.onPaymentRequest;
+    this.onAuthRequest = handlers?.onAuthRequest;
 
     this._readyState = WebSocket.CONNECTING;
 
@@ -161,8 +165,9 @@ export class ProxyWebSocket extends EventTarget implements WebSocket {
       };
     }
   }
-  private upstreamProxyError(_message?: string) {
-    const event = new Event("error");
+  private upstreamProxyError(message?: string) {
+    // @ts-expect-error
+    const event = new Event("error", { message });
     this._readyState = WebSocket.CLOSED;
     this.onerror?.(event);
     this.ws.close();

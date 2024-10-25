@@ -1,0 +1,30 @@
+.proxy-card {
+  border: 1px solid gray;
+  border-radius: 4px;
+  padding: 0.5em;
+}
+
+.proxy-card .title {
+  display: flex;
+  align-items: center;
+}
+
+.proxy-card .image {
+  height: 2em;
+  width: auto;
+}
+
+.proxy-card p,
+.proxy-card h4 {
+  margin: 0;
+}
+
+.proxy-card .about {
+  margin: 0.5em 0;
+}
+
+#proxies {
+  display: flex;
+  gap: 0.4em;
+  flex-direction: column;
+}

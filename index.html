@@ -4,17 +4,27 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Epoxy Route Builder</title>
+    <link rel="stylesheet" href="example/style.css" />
   </head>
   <body>
     <div>
       <button id="topup">topup</button>
       <button id="withdraw">withdraw</button>
-      <div id="balance"></div>
+      <span id="balance"></span>
       <div id="mint"></div>
     </div>
     <hr />
     <form id="setup">
-      <input name="proxy" type="text" size="60" placeholder="ws://proxy.example.com" style="font-family: monospace" />
+      <input
+        name="proxy"
+        type="text"
+        size="60"
+        placeholder="ws://proxy.example.com"
+        style="font-family: monospace"
+        required
+      />
+      <button type="button" id="find-proxy">find proxy</button>
+      <div id="proxies" style="display: none"></div>
       <br />
       <textarea name="hops" rows="6" cols="80" placeholder="hops" style="font-family: monospace"></textarea>
       <br />
